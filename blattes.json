@@ -1,0 +1,114 @@
+on('ready',()=>{
+    const pieces = {
+        red: {
+            name: "Red",
+            image: "https://s3.amazonaws.com/files.d20.io/images/126044952/9GdBdkOdF5vhPR3fNhvQag/original.jpg?1587581906",
+            num: 3
+        },
+        green: {
+            name: "Green",
+            image: "https://s3.amazonaws.com/files.d20.io/images/126044950/qTuLyFGYDXhu9A_Tzdn6lQ/original.jpg?1587581906",
+            num: 6
+        },
+        blue: {
+            name: "Blue",
+            image: "https://s3.amazonaws.com/files.d20.io/images/126044947/3TVwHcYoAy4HCA-nyK21RA/original.jpg?1587581906",
+            num:12 
+        },
+        white: {
+            name: "White",
+            image: "https://s3.amazonaws.com/files.d20.io/images/126044948/9epZ-YPwc_RMQMUOa7qtBA/original.jpg?1587581906",
+            num: 18 
+        },
+        black: {
+            name: "Black",
+            image: "https://s3.amazonaws.com/files.d20.io/images/126044951/eGCv4J08ul7TkyDE0psDUw/original.jpg?1587581906",
+            num: 3
+        }
+    };
+
+    const styles = {
+        bspan: 'display:block;',
+        imgTitle: 'font-weight:bold;text-align:center;',
+        img: 'max-width: 2em; max-height: 3em;width:auto;height:auto;border:1px solid #999;float:left;margin: .1em; display: inline-block; float: left;',
+        wrapper: "border: 1px solid #999; background-color:#ffffee; padding: .5em; border-radius: .5em;",
+        desc: "font-weight: bold; padding: .2em; font-size 1.1em;",
+        msg: "padding: .5em;"
+    };
+
+    
+    const HE = (() => {
+        const esRE = (s) => s.replace(/(\\|\/|\[|\]|\(|\)|\{|\}|\?|\+|\*|\||\.|\^|\$)/g,'\\$1');
+        const e = (s) => `&${s};`;
+        const entities = {
+            '<' : e('lt'),
+            '>' : e('gt'),
+            "'" : e('#39'),
+            '@' : e('#64'),
+            '{' : e('#123'),
+            '|' : e('#124'),
+            '}' : e('#125'),
+            '[' : e('#91'),
+            ']' : e('#93'),
+            '"' : e('quot')
+        };
+        const re = new RegExp(`(${Object.keys(entities).map(esRE).join('|')})`,'g');
+        return (s) => s.replace(re, (c) => (entities[c] || c) );
+    })();
+
+    const makeImageTitle = (k) => `<span style="${styles.bspan}"><span style="display:block;background-image: url('${pieces[k].image}');background-repeat: no-repeat;height:247px;width:169px;"></span><span style="${styles.imgTitle}">${pieces[k].name}</span></span>`;
+    const makeImage = (k) => `<span class="showtip tipsy" title="${HE(HE(makeImageTitle(k)))}"><img style="${styles.img}" src="${pieces[k].image}" alt="${pieces[k].name}"></span>`;
+    const wrapImages = (t) => `<div style="${styles.wrapper}">${t}<div style="clear:both;"></div></div>`;
+    const desc = (d) => d.length ? `<div style="${styles.desc}">${d}</div>` : '';
+    const buildMsg = (d,i) => `<div style="${styles.msg}">${desc(d)}${i}</div>`;
+
+    const getPouch = ()=>Object.keys(pieces).reduce( (m,k)=> [...m, ...Array(pieces[k].num).fill(k)], []);
+
+    on('chat:message',(msg)=>{
+        if('api'===msg.type){
+            let match = msg.content.match(/^!(b|w|bw|)pick(?:\b\s|$)/i);
+            if(!match){
+                return;
+            }
+
+            let who = (getObj('player',msg.playerid)||{get:()=>'API'}).get('_displayname');
+
+            let parts = msg.content.split(/\s+--\s+/);
+            let cmd = parts[0].split(/\s+/);
+
+            let pouch = getPouch();
+            let num = Math.min(parseInt(cmd[1])||1,pouch.length);
+            let picks = [];
+            for(let n = 0; (n<num) && (pouch.length > 0); ++n){
+                let idx = randomInteger(pouch.length);
+                picks.push(pouch[idx-1]);
+                pouch = pouch.filter((v,i)=>i!==(idx-1));
+            }
+
+
+            let output = buildMsg( parts[1]||'', wrapImages(picks.map(makeImage).join('')));
+            let blind = buildMsg( parts[1]||'', "...blind results sent to gm...");
+
+            switch(match[1]){
+                case 'w':
+                    sendChat(`player|${msg.playerid}`,`/w "gm" ${output}`);
+                    sendChat(`player|${msg.playerid}`,`/w "${who}" ${output}`);
+                    break;
+
+                case 'b':
+                    sendChat(`player|${msg.playerid}`,`/w "gm" ${output}`);
+                    sendChat(`player|${msg.playerid}`,blind);
+                    break;
+
+                case 'bw':
+                    sendChat(`player|${msg.playerid}`,`/w "gm" ${output}`);
+                    sendChat(`player|${msg.playerid}`,`/w "${who}" ${blind}`);
+                    break;
+
+                default:
+                    sendChat(`player|${msg.playerid}`,output);
+            }
+
+        }
+    });
+});
